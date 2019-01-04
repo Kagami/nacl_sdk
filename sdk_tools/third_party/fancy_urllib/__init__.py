@@ -199,15 +199,19 @@ def create_fancy_connection(tunnel_host=None, key_file=None,
       # the function, but doesn't require a dynamic import, which doesn't
       # play nicely with dev_appserver.
       if can_validate_certs():
-        self.sock = ssl.wrap_socket(self.sock,
-                                    keyfile=self.key_file,
-                                    certfile=self.cert_file,
-                                    ca_certs=self.ca_certs,
-                                    cert_reqs=self.cert_reqs)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+        context.options |= ssl.OP_NO_SSLv2
+        context.options |= ssl.OP_NO_SSLv3
+        context.options |= ssl.OP_NO_COMPRESSION
+        context.verify_mode = self.cert_reqs
+        if self.ca_certs:
+            context.load_verify_locations(self.ca_certs)
+
+        hostname = self.host.split(":", 0)[0]
+        self.sock = context.wrap_socket(self.sock, server_hostname=hostname)
 
         if self.cert_reqs & ssl.CERT_REQUIRED:
           cert = self.sock.getpeercert()
-          hostname = self.host.split(":", 0)[0]
           if not self._validate_certificate_hostname(cert, hostname):
             raise InvalidCertificateException(hostname, cert,
                                               "hostname mismatch")
